@@ -1,7 +1,7 @@
 ---
 title: "neualNetSales"
-author: "Dr. J"
-date: "7/21/2019"
+author: "Luis Hernandez"
+date: "11/08/2019"
 output: 
   html_document:
     toc: true
@@ -13,11 +13,25 @@ output:
 This is an application of a neural network designed to identify characterists of car buyers.  The purose is to direct advertising
 
 **ASSIGNMENT:**    
-  1. Find the 'best' sales target price for predicting sales -  
-  2. Determing values of age, gender, income level or commute distance *i.e.* miles/wk that predict best sales  
+  1. Find the 'best' sales target price for predicting sales
+  
+  I used $15,000 target price
+  
+  2. Determing values of age, gender, income level or commute distance *i.e.* miles/wk that predict best sales
+  
+  I used: x = filter(testDataSet, income > 7000 & debt < 8500) 
+  
   3. Determing the appropriate neural net - how many hidden layers, what variables to leave out?  
-  4. Does it help to use 80/20 (or any other) split for training/test sets?  
-  5. Recommend an advetising approach based on your findings  
+  
+  I used 3 hidden layers, and left out age, gender, and commute distance 
+  
+  4. Does it help to use 80/20 (or any other) split for training/test sets?
+  
+  I used a 70/30 split
+  
+  5. Recommend an advetising approach based on your findings
+  
+  I remommend foucsing on income and debt when targeting possible customers
   
 ## first set up the environment
 
@@ -43,18 +57,7 @@ income         | buyer montly income
 sales          | amount spent on a used car
 
 
-## set up the normalized data:  
 
-```{r}
-#normalize age, miles, debt, income, and sales
-carsNormalized = cars
-carsNormalized$age = (cars$age-mean(cars$age))/sd(cars$age)
-carsNormalized$miles = (cars$miles-mean(cars$miles))/sd(cars$miles)
-carsNormalized$debt = (cars$debt - mean(cars$debt))/sd(cars$debt)
-carsNormalized$income = (cars$income-mean(cars$income))/sd(cars$income)
-carsNormalized$sales = (cars$sales-mean(cars$sales))/sd(cars$sales)
-
-```
 
 ## print the first 6 entries of the cars data set
 
@@ -64,14 +67,16 @@ set the target price for sales
 
 ```{r}
 
-salesTargetPrice = 8500
+salesTargetPrice = 15000
 
 summary(cars$sales)
 hist(cars$sales, xlab='price', main='Used Car Sales Prices')
 
+boxplot(cars$sales, main='sales prices',horizontal = TRUE, xlab='$')
+grid()
+
 # set up 'yes / no' based on sales price salesTargetPrice
 cars$salesTgt = ifelse(cars$sales>salesTargetPrice,1,0)
-carsNormalized$salesTgt = ifelse(cars$sales>salesTargetPrice,1,0)
 
 head(cars)
 ```
@@ -86,34 +91,62 @@ set the training fraction
 ```{r}
 ##set up the training and test data:
 
-trainingFraction = 0.75
+trainingFraction = 0.70
 
 lengthData = length(cars$age) #  how many entries in the data set
-nTrain = 0
-nTest=0
+
 nTrain = round(trainingFraction*lengthData,0)
 nTest = lengthData-nTrain
 
 # shuffle the data, take the first nTrain as the training set, the 
 # remainder as the test set
-shuffle = sample(1:lengthData) 
+shuffle = sample(1:lengthData, replace=FALSE) 
 
+#set up the test and train objects
 testDataSet = vector("numeric", length=nTest)
 trainDataset= vector("numeric", length=nTrain)
 trainIndex = shuffle[1:nTrain]
 trainDataSet = cars[shuffle[1:nTrain],]
-normalizedTrainDataSet= carsNormalized[shuffle[1:nTrain],]
+
 
 testIndex = vector("numeric")
-testIndex = shuffle[nTest+1:lengthData]
-testDataSet = cars[shuffle[(nTrain+1):lengthData],]
-normalizedTestDataSet = carsNormalized[shuffle[(nTrain+1):lengthData],]
+testIndex = shuffle[-trainIndex]
+testDataSet = cars[shuffle[-trainIndex],]
+
 
 head(trainDataSet)
+
+```
+
+Set up normalized set-- based on the test set
+
+```{r}
+meanAge = mean(testDataSet$age)
+sdAge = sd(testDataSet$age)
+meanMiles = mean(testDataSet$miles)
+sdMiles = sd(testDataSet$miles)
+meanDebt = mean(testDataSet$debt)
+sdDebt = sd(testDataSet$debt)
+meanIncome = mean(testDataSet$income)
+sdIncome = sd(testDataSet$income)
+
+#normalize age, miles, debt, income, and sales
+## normalize the entire data set based on the test set..
+carsNormalized = cars
+carsNormalized$age = (cars$age-meanAge)/sdAge
+carsNormalized$miles = (cars$miles-meanMiles)/sdMiles
+carsNormalized$debt = (cars$debt - meanDebt)/sdDebt
+carsNormalized$income = (cars$income-meanIncome)/sdIncome
+carsNormalized$salesTgt = cars$salesTgt
+
+
+normalizedTrainDataSet= carsNormalized[shuffle[trainIndex],]
+normalizedTestDataSet = carsNormalized[shuffle[-trainIndex],]
 
 head(normalizedTrainDataSet)
 
 ```
+
 
 # what factors may be in play??
   
@@ -121,7 +154,6 @@ head(normalizedTrainDataSet)
 linearModel = glm(sales~ age + gender + miles + debt + income, data = trainDataSet)
 summary(linearModel)
 print(linearModel)
-plot(linearModel)
 ```
 
  leave gender out  
@@ -131,7 +163,6 @@ plot(linearModel)
 ```{r}
 logisticModel = glm(salesTgt ~ age + miles + debt + income, family=binomial, data = trainDataSet)
 summary(logisticModel)
-plot(logisticModel)
 b = as.numeric(logisticModel$coefficients)
 
 ```
@@ -140,16 +171,19 @@ b = as.numeric(logisticModel$coefficients)
 print probabilities of sale based on age from logistic regression
 
 ```{r}
-
+# use average values for debt, income, and miles driven/wk
 averageDebt = mean(testDataSet$debt)
 averageIncome = mean(testDataSet$income)
 averageMiles = mean(testDataSet$miles)
+
+# logistic regresson coefficients from previous chunk
+
 xx = b[1]+b[2]*testDataSet$age + b[3]*averageMiles +
   b[4]*averageDebt + b[5]*averageIncome
 pred.prob = 1./(1+exp(xx))
 
-plot(testDataSet$age, pred.prob, ylab='prob of sale',
-     xlab='age')
+plot(testDataSet$age, pred.prob, ylab='prob of sale', xlab='age')
+grid()
 ```
 
 ## Cross tabulation of logistic regression predictions  
@@ -161,7 +195,8 @@ xTabLogis = matrix(0,nrow=2, ncol=2)
 probSale = 0.2
 for(i in 1:nTest){
   
-  if((pred.prob[i]>probSale) && (testDataSet$salesTgt[i]==1) )          xTabLogis[2,2] = xTabLogis[2,2]+1
+  if((pred.prob[i]>probSale) && (testDataSet$salesTgt[i]==1) )
+     xTabLogis[2,2] = xTabLogis[2,2]+1
      
   if((pred.prob[i]>probSale) && (testDataSet$salesTgt[i]==0))
      xTabLogis[2,1] = xTabLogis[2,1]+1
@@ -179,18 +214,19 @@ print('columns are truth in data set, ')
 print('rows are predicted by logistic regression ')
 
 accuracyLogis = (xTabLogis[1,1]+xTabLogis[2,2])/nTest
-print(paste('Overall accuracy: ', round(accuracyLogis,2)))
+print(paste('Overall accuracy: ', round(accuracyLogis,2)*100,'%', sep=''))
 
 ```
 
 
 # On with the NN  
 
-## Use the normalized data!
+## Use the normalized data!  
+set up the nerual net  
 
 ```{r SalesNet}
 # set up the model using the training set
-salesNet = neuralnet(salesTgt~age+miles+debt+income, data = normalizedTrainDataSet, hidden=c(2), stepmax=1.e5, rep=5)
+salesNet = neuralnet(salesTgt~age+miles+debt+income, data = normalizedTrainDataSet, hidden=c(3,2), stepmax=1.e6, rep=1, linear.output = FALSE)
 
 ```
 
@@ -209,7 +245,8 @@ xTabNN = matrix(0,nrow=2, ncol=2)
 
 for(i in 1:nTest){
   
-  if((salesNet$response[i]==1) && (testDataSet$salesTgt[i]==1) )          xTabNN[2,2] = xTabNN[2,2]+1
+  if((salesNet$response[i]==1) && (testDataSet$salesTgt[i]==1) )
+     xTabNN[2,2] = xTabNN[2,2]+1
      
   if((salesNet$response[i]==1) && (testDataSet$salesTgt[i]==0))
      xTabNN[2,1] = xTabNN[2,1]+1
@@ -229,12 +266,11 @@ print('rows are predicted by logistic regression ')
 accuracyNN = (xTabNN[1,1]+xTabNN[2,2])/nTest
 print(paste('Overall accuracy: ', round(accuracyNN,3)))
 
-
 ```
 
 ## look at a few of the fit values..
 
-```{r}
+```{r echo=FALSE}
 randomTest = sample(1:length(normalizedTestDataSet$salesTgt), 15)
 
 x = data.frame(age=normalizedTestDataSet$age[randomTest],     miles=normalizedTestDataSet$miles[randomTest],
@@ -243,9 +279,59 @@ x = data.frame(age=normalizedTestDataSet$age[randomTest],     miles=normalizedTe
 
 print(x)
 
-print(paste('actual = ', normalizedTestDataSet$salesTgt[randomTest], '  predicted: ', salesNet$response[randomTest]))
+print('Actual    Predicted')
+for (i in 1:15)
+  print(paste(normalizedTestDataSet$salesTgt[randomTest][i],'     ',salesNet$response[randomTest][i]))
 
 
 ```
 
+Set up an example subset of expected buyers
 
+
+=====    
+set up x, the input vector based on values you think
+are appropriate for advertising  
+=====
+
+
+```{r}
+library(dplyr)
+# set test conditions
+
+# set up x with conditons on age, income, debt and miles you think 
+# would be appropriate for advertising
+
+#use dply function 'filter' to pull appropriate data from test set
+x = filter(testDataSet, income > 7000 & debt < 8500)
+
+#age < 36 & miles > 20
+
+# to use in the neural net, normalize the test set data
+# notice that we use mean and sd values computed from the
+# train set.  The deal is, we don't know the mean and sd from 
+# future observations..   until we use that data to update the model
+
+for (i in length(x$age)){
+  x$age = (x$age-meanAge)/sdAge
+  x$miles = (x$miles-meanMiles)/sdMiles
+  x$debt = (x$debt - meanDebt)/sdDebt
+  x$income = (x$income-meanIncome)/sdIncome
+}
+
+# print the values of the normalized inputs
+print(x)
+
+# make predicitions... 
+predX = predict(salesNet, x)
+
+# print the results predicted by the neural net
+
+table(predX[,1]>0.5, x$salesTgt)
+
+```
+
+ 0 and 1 are truth from the train sets,   
+ TRUE -- predicted  '1'  
+ FALSE -- predicted  '0'  
+ 
